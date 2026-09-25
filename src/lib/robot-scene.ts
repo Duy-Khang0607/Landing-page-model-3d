@@ -19,6 +19,17 @@ const CLIP_MAP: Record<string, string | null> = {
 };
 
 const MODEL_PATH = '/assets/models/robot.glb';
+const DRACO_DECODER_PATH = '/draco/';
+
+let sharedDracoLoader: DRACOLoader | null = null;
+
+const getDracoLoader = () => {
+  if (!sharedDracoLoader) {
+    sharedDracoLoader = new DRACOLoader();
+    sharedDracoLoader.setDecoderPath(DRACO_DECODER_PATH);
+  }
+  return sharedDracoLoader;
+};
 
 type PlayClipOptions = {
   loop?: boolean;
@@ -242,16 +253,13 @@ export const createRobotScene = (canvas: HTMLCanvasElement, options: RobotSceneO
 
     startShowcase();
     state.isLoaded = true;
-    canvas.style.opacity = '1';
     onLoad?.();
     onResize();
   };
 
   const loadModel = () => {
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/draco/');
     const loader = new GLTFLoader();
-    loader.setDRACOLoader(dracoLoader);
+    loader.setDRACOLoader(getDracoLoader());
     loader.load(MODEL_PATH, setupModel, undefined, () => onError?.());
   };
 

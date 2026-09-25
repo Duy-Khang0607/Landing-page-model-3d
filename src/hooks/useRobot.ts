@@ -2,12 +2,10 @@ import { useEffect, useRef } from 'react';
 import { createRobotScene, type RobotScene } from '../lib/robot-scene';
 import { initScrollAnimations } from '../lib/scroll-animations';
 
-const runWhenIdle = (fn: () => void, timeout = 2200) => {
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(fn, { timeout });
-  } else {
-    setTimeout(fn, 80);
-  }
+const bootAfterPaint = (fn: () => void) => {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(fn);
+  });
 };
 
 export const useRobot = (
@@ -20,10 +18,15 @@ export const useRobot = (
   const robotRef = useRef<RobotScene | null>(null);
 
   useEffect(() => {
-    let started = false;
+    let booted = false;
     let visibilityObserver: IntersectionObserver | null = null;
+    let bootObserver: IntersectionObserver | null = null;
 
-    const bootRobot = async () => {
+    const bootRobot = () => {
+      if (booted) return;
+      booted = true;
+      bootObserver?.disconnect();
+
       const canvas = canvasRef.current;
       const heroArch = heroArchRef.current;
       const visibilityArch = visibilityArchRef.current;
@@ -32,7 +35,6 @@ export const useRobot = (
       if (!canvas || !heroArch || !visibilityArch || !stage) return;
 
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      canvas.style.opacity = '0';
       heroArch.classList.add('is-loading');
       stage.classList.add('is-loading');
 
@@ -43,14 +45,12 @@ export const useRobot = (
           robot.enableControls();
           robot.setParallax(true);
           robot.startShowcase();
-          canvas.style.opacity = '1';
           robot.onResize();
         },
         onError: () => {
           heroArch.classList.remove('is-loading');
           stage.classList.remove('is-loading');
           heroArch.classList.add('is-error');
-          canvas.style.opacity = '1';
         },
       });
 
@@ -96,20 +96,18 @@ export const useRobot = (
       };
     };
 
-    const start = () => {
-      if (started) return;
-      started = true;
-      runWhenIdle(() => { bootRobot(); });
-    };
+    const stage = stageRef.current;
+    if (!stage) return;
 
-    window.addEventListener('scroll', start, { passive: true, once: true });
-    window.addEventListener('pointerdown', start, { once: true, passive: true });
-    window.addEventListener('keydown', start, { once: true });
-    window.addEventListener('touchstart', start, { once: true, passive: true });
-    const fallback = setTimeout(start, 5000);
+    bootObserver = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      bootAfterPaint(bootRobot);
+    }, { rootMargin: '160px', threshold: 0 });
+
+    bootObserver.observe(stage);
 
     return () => {
-      clearTimeout(fallback);
+      bootObserver?.disconnect();
       visibilityObserver?.disconnect();
     };
   }, [canvasRef, heroArchRef, heroRef, stageRef, visibilityArchRef]);
